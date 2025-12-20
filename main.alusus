@@ -1,0 +1,248 @@
+import "Srl/Console";
+import "Apm";
+Apm.importFile("Alusus/WebPlatform");
+use Srl;
+use WebPlatform;
+
+//==============================================================================
+// Backend Storage
+
+def todoItems: Array[String]({
+    String("Buy groceries"),
+    String("Finish project documentation"),
+    String("Call the dentist"),
+    String("Review pull requests"),
+    String("Plan team meeting")
+});
+
+//==============================================================================
+// Backend Endpoints
+
+@beEndpoint["GET", "/api/todos"]
+func getTodos (conn: ptr[Http.Connection]) {
+    def result: String = String("[");
+    def i: Int;
+    for i = 0, i < todoItems.getLength(), i = i + 1 {
+        if i > 0 result += String(",");
+        result += String("\"") + todoItems(i) + String("\"");
+    }
+    result += String("]");
+    Http.print(conn, "HTTP/1.1 200 Ok\r\n");
+    Http.print(conn, "Content-Type: text/plain\r\n");
+    Http.print(conn, "Cache-Control: no-cache\r\n");
+    Http.print(conn, "Content-Length: %d\r\n\r\n", result.getLength());
+    Http.print(conn, result.buf);
+}
+
+@beEndpoint["POST", "/api/todos"]
+func addTodo (conn: ptr[Http.Connection]) {
+    def postData: array[Char, 1024];
+    def postDataSize: Int = Http.read(conn, postData~ptr, postData~size);
+    if postDataSize > 0 {
+        todoItems.add(String(postData~ptr, postDataSize));
+        Http.print(conn, "HTTP/1.1 201 Ok\r\n\r\n");
+    } else {
+        Http.print(conn, "HTTP/1.1 400 Ok\r\n\r\n");
+    }
+}
+
+//==============================================================================
+// Frontend
+
+@uiEndpoint["/"]
+@title["To Dos"]
+func main {
+    def todoInput: SrdRef[Input];
+    def todoListContainer: SrdRef[Box];
+
+    // Build the view
+    Window.instance.style.{
+        padding = Length4.pt(0);
+        margin = Length4.pt(0);
+        background = Background(Color(248, 250, 252));
+    };
+
+    Window.instance.setView(Box({}).{
+        style.{
+            display = Display.FLEX;
+            layout = Layout.COLUMN;
+            align = Align.CENTER;
+            justify = Justify.START;
+            width = Length.percent(100);
+            height = Length.vh(100);
+            padding = Length4.pt(40, 20);
+        };
+        addChildren({
+            // Title
+            Text(String("To Dos")).{
+                style.{
+                    fontSize = Length.pt(48);
+                    fontWeight = 700;
+                    fontColor = Color(30, 41, 59);
+                    margin = Length4.pt(0, 0, 32, 0);
+                };
+            },
+
+            // Add todo form
+            Box({}).{
+                style.{
+                    width = Length.pt(600);
+                    background = Background(Color(255, 255, 255));
+                    borderRadius = Length4.pt(12);
+                    padding = Length4.pt(20);
+                    boxShadow = BoxShadow(Length.pt(0), Length.pt(4), Length.pt(16), Length.pt(0), Color(0, 0, 0, 10));
+                    display = Display.FLEX;
+                    layout = Layout.ROW;
+                    gap = Length.pt(12);
+                    margin = Length4.pt(0, 0, 16, 0);
+                };
+                addChildren({
+                    Input().{
+                        todoInput = this;
+                        placeholder = String("Add a new todo...");
+                        style.{
+                            flex = Flex(1);
+                            height = Length.pt(44);
+                            borderRadius = Length4.pt(8);
+                            borderWidth = Length4.pt(1);
+                            borderStyle = BorderStyle.SOLID;
+                            borderColor = Color(209, 213, 219);
+                            padding = Length4.pt(0, 16);
+                            fontSize = Length.pt(16);
+                            background = Background(Color(255, 255, 255));
+                        };
+                        style({ StateSelector.FOCUS }).{
+                            borderColor = Color(59, 130, 246);
+                        };
+                    },
+                    Button(String("Add")).{
+                        style.{
+                            height = Length.pt(44);
+                            padding = Length4.pt(0, 24);
+                            borderRadius = Length4.pt(8);
+                            background = Background(Color(59, 130, 246));
+                            borderWidth = Length4.pt(0);
+                            fontSize = Length.pt(16);
+                            fontWeight = 600;
+                            fontColor = Color(255, 255, 255);
+                            cursor = Cursor.POINTER;
+                        };
+                        style({ StateSelector.HOVER }).{
+                            background = Background(Color(37, 99, 235));
+                        };
+                        style({ StateSelector.ACTIVE }).{
+                            background = Background(Color(29, 78, 216));
+                        };
+                        onClick.connect(closure (todoInput: by_ref, todoListContainer: by_ref)&(widget: ref[Widget], payload: ref[Int]) {
+                            def newTodo: String = todoInput.text;
+                            if newTodo.getLength() > 0 {
+                                // Send to backend
+                                sendRequest(String("POST"), String("/api/todos"), String("Content-Type: application/text"), newTodo, 10000,
+                                    closure (todoListContainer: by_ref)&(json: Json) {
+                                        // Add new item to the list
+                                        todoListContainer.addChildren({
+                                            Box().{
+                                                style.{
+                                                    padding = Length4.pt(16);
+                                                    borderRadius = Length4.pt(8);
+                                                    background = Background(Color(248, 250, 252));
+                                                    borderWidth = Length4.pt(1);
+                                                    borderStyle = BorderStyle.SOLID;
+                                                    borderColor = Color(226, 232, 240);
+                                                    display = Display.FLEX;
+                                                    layout = Layout.ROW;
+                                                    align = Align.CENTER;
+                                                    gap = Length.pt(12);
+                                                };
+                                                addChildren({
+                                                    Text(String("•")).{
+                                                        style.{
+                                                            fontSize = Length.pt(20);
+                                                            fontColor = Color(100, 116, 139);
+                                                        };
+                                                    },
+                                                    Text(newTodo).{
+                                                        style.{
+                                                            fontSize = Length.pt(16);
+                                                            fontColor = Color(51, 65, 85);
+                                                        };
+                                                    }
+                                                });
+                                            }
+                                        });
+                                    }
+                                );
+
+                                // Clear input
+                                todoInput.text = String("");
+                            }
+                        });
+                    }
+                });
+            },
+
+            // Todo list container
+            Box({}).{
+                todoListContainer = this;
+                style.{
+                    width = Length.pt(600);
+                    background = Background(Color(255, 255, 255));
+                    borderRadius = Length4.pt(12);
+                    padding = Length4.pt(24);
+                    boxShadow = BoxShadow(Length.pt(0), Length.pt(4), Length.pt(16), Length.pt(0), Color(0, 0, 0, 10));
+                    display = Display.FLEX;
+                    layout = Layout.COLUMN;
+                    gap = Length.pt(12);
+                };
+            }
+        });
+    });
+
+    // Load todos from backend
+    sendRequest(String("GET"), String("/api/todos"), 0, 0, 10000, closure (todoListContainer: by_ref)&(json: Json) {
+        def body: String = json("eventData")("body");
+        def todos: Json = body;
+        def i: Int;
+        for i = 0, i < todos.getLength(), i = i + 1 {
+            todoListContainer.addChildren({
+                Box().{
+                    style.{
+                        padding = Length4.pt(16);
+                        borderRadius = Length4.pt(8);
+                        background = Background(Color(248, 250, 252));
+                        borderWidth = Length4.pt(1);
+                        borderStyle = BorderStyle.SOLID;
+                        borderColor = Color(226, 232, 240);
+                        display = Display.FLEX;
+                        layout = Layout.ROW;
+                        align = Align.CENTER;
+                        gap = Length.pt(12);
+                    };
+                    addChildren({
+                        Text(String("•")).{
+                            style.{
+                                fontSize = Length.pt(20);
+                                fontColor = Color(100, 116, 139);
+                            };
+                        },
+                        Text(todos(i)).{
+                            style.{
+                                fontSize = Length.pt(16);
+                                fontColor = Color(51, 65, 85);
+                            };
+                        }
+                    });
+                }
+            });
+        }
+    });
+
+    runEventLoop();
+}
+
+function startMyServer() {
+    Console.print("Starting server on port 8010...\nURL: http://localhost:8010/\n");
+    buildAndRunServer(Array[CharsPtr]({ "listening_ports", "8010", "static_file_max_age", "0" }));
+}
+
+startMyServer();
