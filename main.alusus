@@ -1,30 +1,59 @@
 import "Srl/Console";
 import "Apm";
 Apm.importFile("Alusus/WebPlatform");
+Apm.importFile("Alusus/Rows", { "Rows.alusus", "Drivers/Sqlite.alusus" });
+Apm.importFile("Alusus/Uuid");
 use Srl;
 use WebPlatform;
 
 //==============================================================================
-// Backend Storage
+// Backend Storage - Database Model
 
-def todoItems: Array[String]({
-    String("Buy groceries"),
-    String("Finish project documentation"),
-    String("Call the dentist"),
-    String("Review pull requests"),
-    String("Plan team meeting")
+@model["todos", 1]
+class TodoItem {
+    Rows.define_model_essentials[];
+
+    @primaryKey
+    @VarChar["36"]
+    @column
+    def id: String;
+
+    @notNull
+    @VarChar["500"]
+    @column
+    def text: String;
+}
+
+// Initialize database
+def db: Rows.Db(closure (d: ref[SrdRef[Rows.Driver]]) {
+    d = Rows.SqliteDriver(Rows.ConnectionParams().{
+        dbName = "todos.db";
+    })
 });
+db.schemaBuilder[TodoItem].migrate();
+
+//==============================================================================
+// Helper Functions
+
+function generateUuid(): String {
+    def uuid: Uuid.uuid_t;
+    def uuidStr: array[Char, 37];
+    Uuid.generate(uuid);
+    Uuid.unparse(uuid, uuidStr~ptr);
+    return String(uuidStr~ptr);
+}
 
 //==============================================================================
 // Backend Endpoints
 
 @beEndpoint["GET", "/api/todos"]
 func getTodos (conn: ptr[Http.Connection]) {
+    def todos: Array[SrdRef[TodoItem]] = db.from[TodoItem].select();
     def result: String = String("[");
     def i: Int;
-    for i = 0, i < todoItems.getLength(), i = i + 1 {
+    for i = 0, i < todos.getLength(), i = i + 1 {
         if i > 0 result += String(",");
-        result += String("\"") + todoItems(i) + String("\"");
+        result += String("\"") + todos(i).text + String("\"");
     }
     result += String("]");
     Http.print(conn, "HTTP/1.1 200 Ok\r\n");
@@ -39,7 +68,10 @@ func addTodo (conn: ptr[Http.Connection]) {
     def postData: array[Char, 1024];
     def postDataSize: Int = Http.read(conn, postData~ptr, postData~size);
     if postDataSize > 0 {
-        todoItems.add(String(postData~ptr, postDataSize));
+        def todo: TodoItem;
+        todo.id = generateUuid();
+        todo.text = String(postData~ptr, postDataSize);
+        db.save[TodoItem](todo);
         Http.print(conn, "HTTP/1.1 201 Ok\r\n\r\n");
     } else {
         Http.print(conn, "HTTP/1.1 400 Ok\r\n\r\n");
