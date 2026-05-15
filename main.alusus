@@ -1,8 +1,8 @@
 import "Srl/Console";
 import "Apm";
-Apm.importFile("Alusus/WebPlatform");
-Apm.importFile("Alusus/Rows", { "Rows.alusus", "Drivers/Sqlite.alusus" });
-Apm.importFile("Alusus/Uuid");
+Apm.importPackage("Alusus/WebPlatform@0.9");
+Apm.importPackage("Alusus/Rows@0.4", { "Rows.alusus", "Drivers/Sqlite.alusus" });
+Apm.importPackage("Alusus/Uuid@0.1");
 use Srl;
 use WebPlatform;
 
