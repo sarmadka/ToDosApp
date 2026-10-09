@@ -1,10 +1,11 @@
 import "Srl/Console";
 import "Apm";
-Apm.importPackage("Alusus/WebPlatform@0.9");
-Apm.importPackage("Alusus/Rows@0.4", { "Rows.alusus", "Drivers/Sqlite.alusus" });
+Apm.importPackage("Alusus/WebPlatform@0.11");
+Apm.importPackage("Alusus/Rows@0.5", { "Rows.alusus", "Drivers/Sqlite.alusus" });
 Apm.importPackage("Alusus/Uuid@0.1");
 use Srl;
 use WebPlatform;
+use Rows;
 
 //==============================================================================
 // Backend Storage - Database Model
@@ -14,12 +15,12 @@ class TodoItem {
     Rows.define_model_essentials[];
 
     @primaryKey
-    @VarChar["36"]
+    @VarCharDataType["36"]
     @column
     def id: String;
 
     @notNull
-    @VarChar["500"]
+    @VarCharDataType["500"]
     @column
     def text: String;
 }
